@@ -1,0 +1,164 @@
+setwd ("D:/K2Analytics/Datafile/")
+getwd()
+
+## Let us import the data that we intend to use for modeling
+
+FDBK <- read.table("Feedback.csv", sep = ",", header = T)
+nrow(FDBK)
+View(FDBK)
+
+## The Feedback is given in Row wise format. 
+## Transposing data from long to wide format.
+##install.packages("plyr")
+##install.packages("stringi")
+library(plyr)
+library(reshape2)
+
+FDBK_T <- dcast(FDBK, Id ~ Question, mean, value.var = 'Rating')
+View(FDBK_T)
+
+## Reordering the columns and dropping the Id column
+FADF <- FDBK_T[c(2,4:11,3)]
+
+## Questions Metatdata
+
+##Q1 : The objective of the training was clearly defined	
+##Q2 : Participation and interaction was encouraged
+##Q3 : The topics covered were relevant to me	
+##Q4 : The content was organized and easy to follow	
+##Q5 : The materials distributed were helpful
+##Q6 : This training experience will be useful in career
+##Q7 : The trainer was well prepared	
+##Q8 : The time allotted for the training was sufficient	
+##Q9 : Examples and experience discussed were helpful	
+##Q10: Overall the training objective was accomplished	
+
+
+## Dropping the records where customer has given same rating for all questions
+FADF$DEL <- ifelse(FADF[1]!=FADF[2], 0, 
+              ifelse(FADF[1]!=FADF[3],0,
+                ifelse(FADF[1]!=FADF[4],0,
+                  ifelse(FADF[1]!=FADF[5],0,
+                    ifelse(FADF[1]!=FADF[6],0,
+                      ifelse(FADF[1]!=FADF[7],0,
+                        ifelse(FADF[1]!=FADF[8],0,
+                          ifelse(FADF[1]!=FADF[9],0,
+                            ifelse(FADF[1]!=FADF[10],0,1)))))))))
+nrow(FADF)
+FADF <- FADF[which(FADF$DEL == 0), c(1:10)]
+nrow(FADF)
+View(FADF)
+
+
+## We will check the Correlations
+## Note Factor Analysis is best used when there is correlation between the variables
+corr_matrix <- cor(FADF)
+corr_matrix
+
+
+##Prof. Shigenobu Aoki provides the following function to conduct Bartlett's sphericity test at his web page:
+Bartlett.sphericity.test <- function(x)
+{
+  method <- "Bartlett's test of sphericity"
+  data.name <- deparse(substitute(x))
+  x <- subset(x, complete.cases(x)) # Omit missing values
+  n <- nrow(x)
+  p <- ncol(x)
+  chisq <- (1-n+(2*p+5)/6)*log(det(cor(x)))
+  df <- p*(p-1)/2
+  p.value <- pchisq(chisq, df, lower.tail=FALSE)
+  names(chisq) <- "X-squared"
+  names(df) <- "df"
+  return(structure(list(statistic=chisq, parameter=df, p.value=p.value,
+                        method=method, data.name=data.name), class="htest"))
+} 
+
+Bartlett.sphericity.test(FADF)
+
+## let us get the Bartlett test through package "psych"
+##install.packages("psych")
+library(psych)
+cortest.bartlett(R = corr_matrix, nrow(FADF))
+
+
+
+##Prof. Shigenobu Aoki provides the following function to calculate KMO and MSA at his web page:
+## Let us check if we can use the Factor Analysis
+## Kaiser-Meyer-Olkin's sampling adequacy criteria 
+kmo <- function(x)
+{
+  x <- subset(x, complete.cases(x)) # Omit missing values
+  r <- cor(x) # Correlation matrix
+  r2 <- r^2 # Squared correlation coefficients
+  i <- solve(r) # Inverse matrix of correlation matrix
+  d <- diag(i) # Diagonal elements of inverse matrix
+  p2 <- (-i/sqrt(outer(d, d)))^2 # Squared partial correlation coefficients
+  diag(r2) <- diag(p2) <- 0 # Delete diagonal elements
+  KMO <- sum(r2)/(sum(r2)+sum(p2))
+  MSA <- colSums(r2)/(colSums(r2)+colSums(p2))
+  return(list(KMO=KMO, MSA=MSA))
+}
+
+kmo(FADF)
+
+apply(FADF,2,mean)
+apply(FADF,2,sd)
+
+## Let us run the Principal Component Analysis using princomp
+## Principal Component Analysis helps us understand the number of underlying factors
+pca <- princomp(FADF, cor = T, scores = T)
+summary(pca)
+
+
+## Let us see the Scree Plot
+## Scree plot helps to determine number of components
+plot(pca, type = "lines")
+
+
+## Let us do the bi-plot using the first 2 Principal Components
+biplot(pca)
+grid()
+
+## Let us see the Principal Component Scores
+pca$loadings
+head(pca$scores)
+
+
+
+
+## Let us run the Principal Component Analysis using prcomp
+## Principal Component Analysis helps us understand the number of underlying factors
+?prcomp
+pca <- prcomp(FADF, retx = T , center = T, scale. = F)
+summary(pca)
+
+
+## Let us see the Scree Plot
+## Scree plot helps to determine number of components
+plot(pca, type = "lines")
+
+
+## Let us do the bi-plot using the first 2 Principal Components
+biplot(pca)
+grid()
+
+## Let us see the Principal Component Scores
+pca$rotation
+pca$scale
+pca$sdev
+head(pca$x)
+
+
+
+
+# Maximum Likelihood Factor Analysis
+# entering raw data and extracting 3 factors, 
+# with varimax rotation 
+fit <- factanal(FADF, 3, rotation="varimax")
+print(fit, digits=2, cutoff=.3, sort=TRUE)
+# plot factor 1 by factor 2 
+load <- fit$loadings[,1:2] 
+plot(load,type="n") # set up plot 
+text(load,labels=names(FADF),cex=.7) # add variable names
+
+fit
